@@ -1,5 +1,7 @@
 # Playwright + Java Test Automation Showcase
 
+[![CI](https://github.com/Mcube333/playwright-java-showcase/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Mcube333/playwright-java-showcase/actions/workflows/ci.yml) ![Java](https://img.shields.io/badge/Java-17-orange) ![Playwright](https://img.shields.io/badge/Playwright-1.49-2EAD33) ![TestNG](https://img.shields.io/badge/TestNG-7.x-red) ![Docker](https://img.shields.io/badge/Docker-ready-2496ED) [![Allure report](https://img.shields.io/badge/Allure_report-live-purple)](https://mcube333.github.io/playwright-java-showcase/)
+
 End-to-end UI and API automation for [AutomationExercise](https://automationexercise.com), a public
 e-commerce practice site. Built with **Java 17, Playwright, TestNG, AssertJ, Allure and GitHub Actions**.
 
