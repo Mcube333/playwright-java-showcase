@@ -45,6 +45,7 @@ jobs:
       matrix:
         browser: [chromium, firefox, webkit]
     env:
+      HOME: /root   # Firefox refuses to start when $HOME is not owned by the running user (container runs as root)
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       SUITE: ${{ github.event.inputs.suite || (github.event_name == 'schedule' && 'regression') || 'smoke' }}
     steps:

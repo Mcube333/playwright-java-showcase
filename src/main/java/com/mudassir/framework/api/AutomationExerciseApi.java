@@ -9,6 +9,9 @@ import com.microsoft.playwright.options.RequestOptions;
 import com.mudassir.framework.data.TestUser;
 import io.qameta.allure.Step;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+
 /** Thin client over the public AutomationExercise API (https://automationexercise.com/api_list). */
 public class AutomationExerciseApi {
 
@@ -16,7 +19,7 @@ public class AutomationExerciseApi {
     private final APIRequestContext request;
 
     public AutomationExerciseApi(APIRequestContext request) {
-        this.request = request;
+        this.request = retryingOnGatewayErrors(request);
     }
 
     @Step("API: GET products list")
@@ -90,6 +93,37 @@ public class AutomationExerciseApi {
     public ApiResult deleteAccount(String email, String password) {
         return parse(request.delete("/api/deleteAccount", RequestOptions.create()
                 .setForm(FormData.create().set("email", email).set("password", password))));
+    }
+
+    private static final int MAX_ATTEMPTS = 4;
+
+    /**
+     * The public demo site sometimes answers 502/503/504 ("under heavy load, queue full") before the request is
+     * processed. Retry those with a short backoff so a busy third party does not fail the suite; every other
+     * response, including 4xx, is returned untouched.
+     */
+    private static APIRequestContext retryingOnGatewayErrors(APIRequestContext delegate) {
+        return (APIRequestContext) Proxy.newProxyInstance(
+                APIRequestContext.class.getClassLoader(), new Class<?>[]{APIRequestContext.class},
+                (proxy, method, args) -> {
+                    Object result = null;
+                    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                        try {
+                            result = method.invoke(delegate, args);
+                        } catch (InvocationTargetException e) {
+                            throw e.getCause();
+                        }
+                        if (!(result instanceof APIResponse r) || !isGatewayError(r.status()) || attempt == MAX_ATTEMPTS) {
+                            return result;
+                        }
+                        Thread.sleep(2000L * attempt);
+                    }
+                    return result;
+                });
+    }
+
+    private static boolean isGatewayError(int status) {
+        return status == 502 || status == 503 || status == 504;
     }
 
     private ApiResult parse(APIResponse response) {
