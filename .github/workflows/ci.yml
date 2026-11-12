@@ -35,6 +35,8 @@ jobs:
 
   e2e:
     name: E2E ${{ matrix.browser }}
+    # Firefox/WebKit run against a public demo site that sheds load (503 "queue full"); they report but do not gate.
+    continue-on-error: ${{ matrix.browser != 'chromium' }}
     needs: checks
     runs-on: ubuntu-latest
     container:
