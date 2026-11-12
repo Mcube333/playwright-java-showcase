@@ -2,15 +2,40 @@ package com.mudassir.framework.pages;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 import io.qameta.allure.Step;
 
-/** Shared header navigation. All waits are Playwright auto-waits; no Thread.sleep anywhere. */
+/**
+ * Shared header navigation. Test waits are Playwright auto-waits; the only sleep is the bounded backoff in
+ * {@link #navigate(Page, String)}, used while the third-party demo site answers 502/503/504.
+ */
 public abstract class BasePage {
 
     protected final Page page;
 
     protected BasePage(Page page) {
         this.page = page;
+    }
+
+    private static final int NAV_ATTEMPTS = 4;
+
+    /** page.navigate that retries when the demo site is overloaded ("queue full" 503) instead of failing the test. */
+    protected static void navigate(Page page, String path) {
+        for (int attempt = 1; attempt <= NAV_ATTEMPTS; attempt++) {
+            Response response = page.navigate(path);
+            int status = response == null ? 200 : response.status();
+            if (status != 502 && status != 503 && status != 504) {
+                return;
+            }
+            if (attempt < NAV_ATTEMPTS) {
+                try {
+                    Thread.sleep(2000L * attempt);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
     }
 
     protected Locator header() {

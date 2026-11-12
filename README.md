@@ -23,7 +23,7 @@ clean-room rebuild on a public site.
 - **Thread-isolated sessions.** Each test thread gets its own Playwright, Browser, Context and Page via
   `ThreadLocal` (`PlaywrightFactory`). Tests call `page()` instead of holding a field, so parallel methods
   never share state. Suites run `parallel="methods"`.
-- **Condition-based waits only.** No `Thread.sleep`. Playwright auto-waiting locators and web-first
+- **Condition-based waits only.** No `Thread.sleep` in tests (the only backoff is a bounded retry when the demo site returns 502/503/504). Playwright auto-waiting locators and web-first
   assertions (`assertThat(locator).hasText(...)`) handle timing.
 - **API for setup, UI for verification.** Tests that need a logged-in user create it through the API in
   milliseconds, run the UI flow, then delete it through the API. This keeps UI tests fast and independent.

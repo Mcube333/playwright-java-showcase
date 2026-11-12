@@ -82,7 +82,7 @@ jobs:
       - name: Smoke suite against the Playwright server container
         run: |
           SUITE=smoke docker compose --profile remote up \
-            --abort-on-container-exit --exit-code-from tests-remote
+            --abort-on-container-exit --exit-code-from tests-remote tests-remote
       - name: Tear down
         if: always()
         run: docker compose --profile remote down --remove-orphans

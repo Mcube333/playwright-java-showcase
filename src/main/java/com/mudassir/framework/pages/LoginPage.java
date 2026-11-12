@@ -12,7 +12,7 @@ public class LoginPage extends BasePage {
 
     @Step("Open login page")
     public LoginPage open() {
-        page.navigate("/login");
+        navigate(page, "/login");
         return this;
     }
 

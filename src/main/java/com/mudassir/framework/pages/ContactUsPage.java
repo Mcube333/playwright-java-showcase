@@ -14,7 +14,7 @@ public class ContactUsPage extends BasePage {
 
     @Step("Open contact us page")
     public ContactUsPage open() {
-        page.navigate("/contact_us");
+        navigate(page, "/contact_us");
         return this;
     }
 

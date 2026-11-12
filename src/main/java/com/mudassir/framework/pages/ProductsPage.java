@@ -14,7 +14,7 @@ public class ProductsPage extends BasePage {
 
     @Step("Open products page")
     public ProductsPage open() {
-        page.navigate("/products");
+        navigate(page, "/products");
         return this;
     }
 

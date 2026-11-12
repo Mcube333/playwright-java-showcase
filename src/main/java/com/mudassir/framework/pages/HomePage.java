@@ -12,7 +12,7 @@ public class HomePage extends BasePage {
 
     @Step("Open home page")
     public HomePage open() {
-        page.navigate("/");
+        navigate(page, "/");
         return this;
     }
 

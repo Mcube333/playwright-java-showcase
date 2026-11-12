@@ -12,7 +12,7 @@ public class CartPage extends BasePage {
 
     @Step("Open cart")
     public CartPage open() {
-        page.navigate("/view_cart");
+        navigate(page, "/view_cart");
         return this;
     }
 

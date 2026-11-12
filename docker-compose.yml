@@ -1,6 +1,6 @@
 # Local mode:   docker compose run --rm tests
 #               SUITE=regression BROWSER=firefox docker compose run --rm tests
-# Remote mode:  docker compose --profile remote up --build --abort-on-container-exit --exit-code-from tests-remote
+# Remote mode:  docker compose --profile remote up --build --abort-on-container-exit --exit-code-from tests-remote tests-remote
 #               (tests in one container, browsers in a Playwright server container: a grid-style setup)
 
 services:
