@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Suite (regression | smoke | api)"
+        default: "regression"
+  schedule:
+    - cron: "30 3 * * *" # daily 09:00 IST, full regression
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: PII check + compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: bash scripts/pii-check.sh
+      - run: mvn -B -q test-compile
+
+  e2e:
+    name: E2E ${{ matrix.browser }}
+    needs: checks
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright/java:v1.49.0-noble   # browsers preinstalled, no install step
+      options: --ipc=host
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      SUITE: ${{ github.event.inputs.suite || (github.event_name == 'schedule' && 'regression') || 'smoke' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: m2-${{ hashFiles('pom.xml') }}
+      - name: Run ${{ env.SUITE }} on ${{ matrix.browser }}
+        run: mvn -B test -Dsuite=${SUITE} -Dbrowser=${{ matrix.browser }} -Dheadless=true
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ matrix.browser }}
+          path: target/allure-results
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traces-${{ matrix.browser }}
+          path: target/traces
+
+  docker:
+    name: Docker image + remote browser server
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build test image
+        run: docker compose build tests
+      - name: API suite inside the container
+        run: SUITE=api docker compose run --rm tests
+      - name: Smoke suite against the Playwright server container
+        run: |
+          SUITE=smoke docker compose --profile remote up \
+            --abort-on-container-exit --exit-code-from tests-remote
+      - name: Tear down
+        if: always()
+        run: docker compose --profile remote down --remove-orphans
+
+  report:
+    name: Allure report
+    needs: e2e
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download results from all browsers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: allure-results-*
+          path: allure-results
+          merge-multiple: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Generate report
+        run: |
+          npm install -g allure-commandline@2.30.0
+          allure generate allure-results --clean -o allure-report
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: allure-report
+      - name: Publish to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

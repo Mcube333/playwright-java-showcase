@@ -1,0 +1,38 @@
+# Local mode:   docker compose run --rm tests
+#               SUITE=regression BROWSER=firefox docker compose run --rm tests
+# Remote mode:  docker compose --profile remote up --build --abort-on-container-exit --exit-code-from tests-remote
+#               (tests in one container, browsers in a Playwright server container: a grid-style setup)
+
+services:
+  tests:
+    build: .
+    image: playwright-java-showcase:latest
+    ipc: host                       # recommended by Playwright for Chromium in Docker
+    init: true
+    command: ["-Dsuite=${SUITE:-smoke}", "-Dbrowser=${BROWSER:-chromium}", "-Dheadless=true"]
+    volumes:
+      - ./target/allure-results:/tests/target/allure-results
+      - ./target/traces:/tests/target/traces
+
+  playwright-server:
+    profiles: ["remote"]
+    image: mcr.microsoft.com/playwright:v1.49.0-noble   # must match the client version in pom.xml
+    ipc: host
+    init: true
+    command: ["/bin/sh", "-c", "npx -y playwright@1.49.0 run-server --port 3000 --host 0.0.0.0"]
+    expose:
+      - "3000"
+
+  tests-remote:
+    profiles: ["remote"]
+    image: playwright-java-showcase:latest
+    build: .
+    depends_on:
+      - playwright-server
+    command:
+      - "-Dsuite=${SUITE:-smoke}"
+      - "-Dbrowser=${BROWSER:-chromium}"
+      - "-Dbrowser.ws=ws://playwright-server:3000/"
+    volumes:
+      - ./target/allure-results:/tests/target/allure-results
+      - ./target/traces:/tests/target/traces
