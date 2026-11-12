@@ -9,7 +9,7 @@ services:
     image: playwright-java-showcase:latest
     ipc: host                       # recommended by Playwright for Chromium in Docker
     init: true
-    command: ["-Dsuite=${SUITE:-smoke}", "-Dbrowser=${BROWSER:-chromium}", "-Dheadless=true"]
+    command: ["-Dsuite=${SUITE:-smoke}", "-Dbrowser=${BROWSER:-chromium}", "-Dheadless=true", "-Dretry.count=${RETRY_COUNT:-1}"]
     volumes:
       - ./target/allure-results:/tests/target/allure-results
       - ./target/traces:/tests/target/traces
@@ -33,6 +33,7 @@ services:
       - "-Dsuite=${SUITE:-smoke}"
       - "-Dbrowser=${BROWSER:-chromium}"
       - "-Dbrowser.ws=ws://playwright-server:3000/"
+      - "-Dretry.count=${RETRY_COUNT:-1}"
     volumes:
       - ./target/allure-results:/tests/target/allure-results
       - ./target/traces:/tests/target/traces

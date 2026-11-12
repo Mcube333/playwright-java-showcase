@@ -2,22 +2,15 @@ package com.mudassir.framework.driver;
 
 import com.microsoft.playwright.APIRequest;
 import com.microsoft.playwright.APIRequestContext;
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
-import com.microsoft.playwright.options.RequestOptions;
-import com.microsoft.playwright.Route;
 import com.microsoft.playwright.Tracing;
 import com.mudassir.framework.config.ConfigManager;
 
-import java.net.URI;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -71,7 +64,6 @@ public final class PlaywrightFactory {
         context.setDefaultTimeout(ConfigManager.timeoutMs());
         context.setDefaultNavigationTimeout(ConfigManager.navigationTimeoutMs());
         context.route(BLOCKED_HOSTS, route -> route.abort());
-        installGatewayRetry(context, ConfigManager.baseUrl());
 
         if (ConfigManager.traceOnFailure()) {
             context.tracing().start(new Tracing.StartOptions()
@@ -86,66 +78,6 @@ public final class PlaywrightFactory {
         CONTEXT.set(context);
         PAGE.set(page);
         return page;
-    }
-
-    private static final int GATEWAY_ATTEMPTS = 4;
-
-    /**
-     * The public demo site sometimes answers 502/503/504 ("under heavy load, queue full") before it has processed
-     * the request, for page loads, link clicks and its AJAX calls alike. For same-site documents and XHR/fetch
-     * requests, re-send the request with a short backoff and hand the browser the first non-gateway response.
-     * Other requests, and every non-gateway response (including 4xx), pass through untouched.
-     *
-     * <p>Requests the browser issues after a redirect are not routed again, so before returning a 3xx the redirect
-     * target is probed through the same retry loop; the browser's follow-up request then meets a healthy server.
-     */
-    public static void installGatewayRetry(BrowserContext context, String urlPrefix) {
-        context.route(url -> url.startsWith(urlPrefix), route -> {
-            String type = route.request().resourceType();
-            if (!type.equals("document") && !type.equals("xhr") && !type.equals("fetch")) {
-                route.resume();
-                return;
-            }
-            // Ask for an unencoded body: fulfilling with compressed bytes is not reliable across browsers.
-            Map<String, String> requestHeaders = new HashMap<>(route.request().headers());
-            requestHeaders.put("accept-encoding", "identity");
-            APIResponse response = withGatewayRetry(() -> route.fetch(
-                    new Route.FetchOptions().setHeaders(requestHeaders).setMaxRedirects(0)));
-            String location = response.headers().get("location");
-            if (response.status() >= 300 && response.status() < 400 && location != null) {
-                String target = URI.create(route.request().url()).resolve(location).toString();
-                if (target.startsWith(urlPrefix)) {
-                    withGatewayRetry(() -> context.request().get(target, RequestOptions.create().setMaxRedirects(0)));
-                }
-            }
-            // The body is already decoded, so drop the headers that describe the wire encoding.
-            Map<String, String> headers = new HashMap<>(response.headers());
-            headers.remove("content-encoding");
-            headers.remove("content-length");
-            headers.remove("transfer-encoding");
-            route.fulfill(new Route.FulfillOptions()
-                    .setStatus(response.status())
-                    .setHeaders(headers)
-                    .setBodyBytes(response.body()));
-        });
-    }
-
-    private static APIResponse withGatewayRetry(Supplier<APIResponse> call) {
-        APIResponse response = null;
-        for (int attempt = 1; attempt <= GATEWAY_ATTEMPTS; attempt++) {
-            response = call.get();
-            int status = response.status();
-            if ((status != 502 && status != 503 && status != 504) || attempt == GATEWAY_ATTEMPTS) {
-                break;
-            }
-            try {
-                Thread.sleep(1500L * attempt); // bounded backoff against a busy third party, never inside tests
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        return response;
     }
 
     /**
