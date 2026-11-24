@@ -113,7 +113,7 @@ public class AutomationExerciseApi {
                         } catch (InvocationTargetException e) {
                             throw e.getCause();
                         }
-                        if (!(result instanceof APIResponse r) || !isGatewayError(r.status()) || attempt == MAX_ATTEMPTS) {
+                        if (!(result instanceof APIResponse r) || !isTransient(r) || attempt == MAX_ATTEMPTS) {
                             return result;
                         }
                         Thread.sleep(2000L * attempt);
@@ -122,17 +122,30 @@ public class AutomationExerciseApi {
                 });
     }
 
-    private static boolean isGatewayError(int status) {
-        return status == 502 || status == 503 || status == 504;
+    /** Gateway errors, rate limiting, or a 200 whose body is not the usual {"responseCode": ...} JSON (busy-site pages, empty body). */
+    private static boolean isTransient(APIResponse r) {
+        int s = r.status();
+        if (s == 502 || s == 503 || s == 504 || s == 429) {
+            return true;
+        }
+        try {
+            return !MAPPER.readTree(r.text()).has("responseCode");
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     private ApiResult parse(APIResponse response) {
         String text = response.text();
+        JsonNode body;
         try {
-            JsonNode body = MAPPER.readTree(text);
-            return new ApiResult(response.status(), body);
+            body = MAPPER.readTree(text);
         } catch (Exception e) {
             throw new IllegalStateException("Response is not JSON (HTTP " + response.status() + "): " + text, e);
         }
+        if (!body.has("responseCode")) {
+            throw new IllegalStateException("No responseCode in response (HTTP " + response.status() + "): " + text);
+        }
+        return new ApiResult(response.status(), body);
     }
 }
