@@ -53,6 +53,13 @@ public abstract class BasePage {
     @Step("Go to Products")
     public ProductsPage goToProducts() {
         header().locator("a[href='/products']").click();
+        // A click-through bypasses navigate()'s 502/503/504 retry; if the demo site shed the request the grid never
+        // renders, so fall back to a retrying navigation to the same page (the session cookie is kept).
+        try {
+            page.locator(".features_items").first().waitFor(new Locator.WaitForOptions().setTimeout(10_000));
+        } catch (com.microsoft.playwright.TimeoutError e) {
+            navigate(page, "/products");
+        }
         return new ProductsPage(page);
     }
 
