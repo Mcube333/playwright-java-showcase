@@ -8,11 +8,12 @@ WORKDIR /tests
 
 # Dependencies first so this layer is cached until pom.xml changes
 COPY pom.xml .
-RUN mvn -B -q dependency:go-offline
+# Maven Central rate-limits shared CI runner IPs (HTTP 429), so retry with backoff instead of failing the build
+RUN for i in 1 2 3 4 5; do mvn -B -q dependency:go-offline && exit 0; echo "dependency download failed (attempt $i), retrying"; sleep $((i * 20)); done; exit 1
 
 COPY src ./src
 COPY scripts ./scripts
-RUN mvn -B -q test-compile
+RUN for i in 1 2 3; do mvn -B -q test-compile && exit 0; sleep $((i * 20)); done; exit 1
 
 # Default: smoke suite on chromium. Override by passing Maven args to "docker run".
 ENTRYPOINT ["mvn", "-B", "test"]
