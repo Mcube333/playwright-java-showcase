@@ -101,7 +101,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy-retry.outputs.page_url }}
     steps:
       - name: Download results from all browsers
         uses: actions/download-artifact@v4
@@ -123,4 +123,12 @@ jobs:
           path: allure-report
       - name: Publish to GitHub Pages
         id: deploy
+        continue-on-error: true   # the artifact listing can lag a few seconds behind the upload; retry once below
+        uses: actions/deploy-pages@v4
+      - name: Wait for the Pages artifact to be indexed
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 30
+      - name: Publish to GitHub Pages (retry)
+        id: deploy-retry
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
