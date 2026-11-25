@@ -9,6 +9,10 @@ on:
       suite:
         description: "Suite (regression | smoke | api)"
         default: "regression"
+      demo_failure:
+        description: "Run only an intentionally failing test, to demo the failure triage job"
+        type: boolean
+        default: false
   schedule:
     - cron: "30 3 * * *" # daily 09:00 IST, full regression
 
@@ -49,7 +53,7 @@ jobs:
     env:
       HOME: /root   # Firefox refuses to start when $HOME is not owned by the running user (container runs as root)
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      SUITE: ${{ github.event.inputs.suite || (github.event_name == 'schedule' && 'regression') || 'smoke' }}
+      SUITE: ${{ (inputs.demo_failure && 'demo-failure') || github.event.inputs.suite || (github.event_name == 'schedule' && 'regression') || 'smoke' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -96,6 +100,64 @@ jobs:
         with:
           name: traces-${{ matrix.browser }}
           path: target/traces
+      - name: Upload test results for triage
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.browser }}
+          path: target/surefire-reports/TEST-*.xml
+          if-no-files-found: ignore
+
+  triage:
+    name: Failure triage (Claude)
+    needs: e2e
+    # Only when the gating E2E job failed. Firefox/WebKit legs are continue-on-error, so their failures alone
+    # don't trigger this, but their results are included when it runs.
+    if: failure() && needs.e2e.result == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Check for API key
+        id: key
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::notice title=Failure triage::ANTHROPIC_API_KEY secret is not set, skipping triage"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.present == 'true'
+      - uses: actions/setup-java@v4
+        if: steps.key.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Download test results
+        if: steps.key.outputs.present == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: triage-input/results
+      - name: Download self-healing reports
+        if: steps.key.outputs.present == 'true'
+        continue-on-error: true   # absent when no locator was healed
+        uses: actions/download-artifact@v4
+        with:
+          pattern: self-healing-*
+          path: triage-input/heals
+      - name: Classify failures with Claude
+        if: steps.key.outputs.present == 'true'
+        run: mvn -B -q -f ci/triage/pom.xml compile exec:java -Dexec.args="triage-input/results triage-input/heals triage"
+      - name: Upload triage report
+        if: steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-triage
+          path: triage
+          if-no-files-found: ignore
 
   docker:
     name: Docker image + remote browser server
@@ -120,7 +182,7 @@ jobs:
   report:
     name: Allure report
     needs: e2e
-    if: always() && github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && !inputs.demo_failure   # keep demo failures off the live report
     runs-on: ubuntu-latest
     permissions:
       pages: write

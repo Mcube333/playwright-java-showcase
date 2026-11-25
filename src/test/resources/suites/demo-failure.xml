@@ -1,0 +1,11 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Intentionally failing suite, used only to demo the CI failure-triage job (workflow_dispatch demo_failure). -->
+<suite name="Demo failure">
+    <listeners>
+        <listener class-name="com.mudassir.tests.listeners.RetryTransformer"/>
+        <listener class-name="com.mudassir.tests.listeners.FailureListener"/>
+    </listeners>
+    <test name="Demo failure">
+        <packages><package name="com.mudassir.tests.demo"/></packages>
+    </test>
+</suite>

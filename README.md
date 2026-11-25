@@ -86,6 +86,27 @@ and the login continues.
   which suits PR builds.
 - `mvn test -Dtest=SelfHealingDemoTest` runs an offline demo of the heuristic heal, the cache and `SUGGEST` mode.
 
+## AI failure triage
+
+When the E2E job fails, a `triage` job reads the Surefire XML from every browser. For each failed test it
+collects the name, the error message and the first 30 lines of the stack trace, plus any self-healing heal
+events. It sends these to Claude (`claude-sonnet-5-5`), which classifies each failure as `TEST_BUG`,
+`PRODUCT_BUG`, `ENVIRONMENT` or `FLAKY`, with a one-line reason and a suggested fix. The answer comes back
+as schema-checked JSON.
+
+The result is written as a table to the job summary and uploaded as the `failure-triage` artifact
+(`triage.md` + `triage.json`):
+
+| Browser | Test | Category | Reason | Suggested fix |
+|---|---|---|---|---|
+| chromium | `DemoFailureTest.loginButtonSaysSignIn` | **TEST_BUG** | (one-line reason) | (one-line fix) |
+
+- Setup: add an `ANTHROPIC_API_KEY` repository secret. Without it the job skips with a notice and doesn't fail.
+- If the API call fails, the failures are still listed (unclassified) with a warning.
+- Demo: Actions > CI > Run workflow, tick **demo_failure**. That runs only `DemoFailureTest`, which fails
+  on purpose (it expects the login button to say "Sign in"), so the triage can be shown without breaking `main`.
+- The tool is a small standalone Maven project in `ci/triage/` (Anthropic Java SDK). It isn't part of the test framework build.
+
 ## Project structure
 
 ```
@@ -101,7 +122,8 @@ src/test/java/com/mudassir/tests
   listeners/  retry + failure evidence
   ui/         UI tests
   api/        API tests
-src/test/resources/suites   regression.xml, smoke.xml, api.xml
+src/test/resources/suites   regression.xml, smoke.xml, api.xml, demo-failure.xml
+ci/triage                   CI-only failure triage tool (Claude API)
 ```
 
 ## Running
@@ -147,8 +169,10 @@ GitHub Actions (`.github/workflows/ci.yml`):
 3. **Docker job:** builds the image, runs the API suite in it, then runs smoke against the
    Playwright server container through Docker Compose.
 4. **Allure report:** results from all browsers merged into one report and published to **GitHub Pages**
-   on every run on `main`.
-5. Traces uploaded for failed browsers; superseded runs on the same branch are cancelled.
+   on every run on `main` (except `demo_failure` runs).
+5. **Failure triage:** if E2E fails, Claude classifies each failed test and the result is posted to the job
+   summary (see [AI failure triage](#ai-failure-triage)).
+6. Traces uploaded for failed browsers; superseded runs on the same branch are cancelled.
 
 To enable the report: repo Settings > Pages > Source: **GitHub Actions**.
 
