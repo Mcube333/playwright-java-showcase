@@ -9,6 +9,8 @@ This repo shows the same engineering patterns I used to build a production autom
 (98 E2E tests) at a furniture-rental e-commerce company. The original is proprietary, so this is a
 clean-room rebuild on a public site.
 
+Part of my [QA & SDET portfolio](https://github.com/Mcube333/portfolio), alongside the [Appium](https://github.com/Mcube333/appium-java-mobile-showcase), [k6](https://github.com/Mcube333/k6-performance-showcase) and [analytics validator](https://github.com/Mcube333/analytics-event-validator) projects.
+
 ## What it covers
 
 | Area | Tests |
@@ -108,6 +110,10 @@ GitHub Actions (`.github/workflows/ci.yml`):
 5. Traces uploaded for failed browsers; superseded runs on the same branch are cancelled.
 
 To enable the report: repo Settings > Pages > Source: **GitHub Actions**.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
 
 ## Author
 
