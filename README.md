@@ -52,6 +52,40 @@ Allure overview from a CI run (26 tests, all passing), grouped by feature. The [
 - **PII guard in CI.** `scripts/pii-check.sh` fails the build if real-looking emails, phone numbers or
   card numbers appear in source. Test data is synthetic (`@example.com`, zeroed phone numbers).
 
+## Self-healing locators
+
+`SelfHealingLocator` wraps `page.locator()`. If a selector stops matching (say a renamed `data-qa`), it finds
+the intended element and logs the fix so the test can keep going. It tries three things in order:
+1. A heal cached from an earlier run.
+2. A heuristic that scores visible elements against the fingerprint saved the last time the selector worked.
+3. Optionally, Claude, if `ANTHROPIC_API_KEY` is set.
+
+If nothing matches confidently, the test fails with the original error.
+
+Before (`LoginPage`):
+
+```java
+page.locator("button[data-qa='login-button']").click();
+```
+
+After:
+
+```java
+heal.find("login.submit", "button[data-qa='login-button']", "Login button on the login form").click();
+```
+
+If the site renames the attribute to `data-qa='login-submit'`, the run logs
+`login.submit: 'button[data-qa='login-button']' -> 'button[data-qa="login-submit"]' via HEURISTIC (1.00)`
+and the login continues.
+
+- Every heal is appended to `target/self-healing/heal-report.jsonl`. CI uploads that file as an artifact
+  and attaches it to the Allure report, so it can be reviewed and the page object fixed. Heals are a safety
+  net, not the fix.
+- Use it only for elements you act on. Assertions keep plain locators, so a heal can't hide a real bug.
+- `-Dselfheal.mode=HEAL|SUGGEST|OFF` (default `HEAL`). `SUGGEST` still fails the step but names the fix,
+  which suits PR builds.
+- `mvn test -Dtest=SelfHealingDemoTest` runs an offline demo of the heuristic heal, the cache and `SUGGEST` mode.
+
 ## Project structure
 
 ```
@@ -61,6 +95,7 @@ src/main/java/com/mudassir/framework
   pages/    10 page objects          fluent, @Step-annotated for Allure
   api/      AutomationExerciseApi    Playwright APIRequestContext client
   data/     TestUser, UserFactory    unique synthetic users per test
+  selfheal/ SelfHealingLocator       heals broken selectors, logs every fix for review
 src/test/java/com/mudassir/tests
   base/       BaseUiTest, BaseApiTest
   listeners/  retry + failure evidence

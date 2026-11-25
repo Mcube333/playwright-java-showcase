@@ -58,6 +58,32 @@ jobs:
           key: m2-${{ hashFiles('pom.xml') }}
       - name: Run ${{ env.SUITE }} on ${{ matrix.browser }}
         run: mvn -B test -Dsuite=${SUITE} -Dbrowser=${{ matrix.browser }} -Dheadless=true -Dretry.count=3   # the public demo site has long bad spells
+      - name: Attach self-healing report to Allure
+        # Every healed locator is a selector to fix in a page object. Surface them as one entry in the Allure report.
+        if: always()
+        run: |
+          report=target/self-healing/heal-report.jsonl
+          if [ ! -s "$report" ]; then echo "No locators healed"; exit 0; fi
+          heals=$(wc -l < "$report")
+          id=$(cat /proc/sys/kernel/random/uuid)
+          now=$(date +%s%3N)
+          mkdir -p target/allure-results
+          cp "$report" "target/allure-results/${id}-attachment.txt"
+          cat > "target/allure-results/${id}-result.json" <<EOF
+          {"uuid":"${id}","historyId":"self-healing-${{ matrix.browser }}",
+           "name":"Self-healing report (${{ matrix.browser }})","fullName":"selfheal.report.${{ matrix.browser }}",
+           "status":"passed","stage":"finished","start":${now},"stop":${now},
+           "description":"${heals} locator heal event(s). Update these selectors in the page objects.",
+           "labels":[{"name":"feature","value":"Self-healing locators"}],
+           "attachments":[{"name":"heal-report.jsonl","source":"${id}-attachment.txt","type":"text/plain"}]}
+          EOF
+      - name: Upload self-healing report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-healing-${{ matrix.browser }}
+          path: target/self-healing/heal-report.jsonl
+          if-no-files-found: ignore
       - name: Upload Allure results
         if: always()
         uses: actions/upload-artifact@v4

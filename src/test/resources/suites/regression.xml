@@ -10,4 +10,7 @@
     <test name="UI">
         <packages><package name="com.mudassir.tests.ui"/></packages>
     </test>
+    <test name="Self-healing">
+        <packages><package name="com.mudassir.tests.selfheal"/></packages>
+    </test>
 </suite>
