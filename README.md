@@ -22,6 +22,12 @@ Part of my [QA & SDET portfolio](https://github.com/Mcube333/portfolio), alongsi
 | Contact & Subscription | file upload + JS confirm dialog, newsletter subscription |
 | API | product schema, unique ids, 405 / 400 / 404 negative cases, full account lifecycle, duplicate account |
 
+## Sample report
+
+Allure overview from a CI run (26 tests, all passing), grouped by feature. The [live report](https://mcube333.github.io/playwright-java-showcase/) is published to GitHub Pages by the pipeline.
+
+![Allure report overview](docs/allure-report.png)
+
 ## Design decisions
 
 - **Thread-isolated sessions.** Each test thread gets its own Playwright, Browser, Context and Page via
